@@ -1,0 +1,49 @@
+Segmentation fault
+  code: SEGV_MAPERR
+  addr: 0x21e8f60
+  context: 0x7f136aaff5c0
+  siginfo: 0x7f136aaff6f0
+  rax      0x21e8f60          35557216
+  rbx      0x11               17
+  rcx      0x120              288
+  rdx      0x33               51
+  rsi      0x109d840          17422400
+  rdi      0x21e8f60          35557216
+  rsp      0x7f136aaffc58     139721371024472
+  rbp      0x7f136aaffcb0     139721371024560
+  r8       0x10bdcd0          17554640
+  r9       0x109d86c          17422444
+  r10      0x33               51
+  r11      0x7                7
+  r12      0x21e8f60          35557216
+  r13      0x33               51
+  r14      0x109d840          17422400
+  r15      0x5                5
+  rip      0x7f13974e5691     139722119599761
+  eflags   0x10287            66183
+  cs       0x33               51
+  gs       0x0                0
+  fs       0x0                0
+  cr2      0x21e8f60          35557216
+  err      0x6                6
+  oldmask  0x0                0
+  trapno   0xe                14
+Current time: 1628667601
+Please file a bug at http://github.com/tarantool/tarantool/issues
+Attempting backtrace... Note: since the server has already crashed, 
+this may fail as well
+#0  0x5c2b36 in crash_signal_cb+a6
+#1  0x7f139792d3c0 in funlockfile+60
+#2  0x7f13974e5691 in __nss_database_lookup+282a1
+#3  0x474bef in vy_stmt_dup_lsregion+cf
+#4  0x496e7c in vy_lsm_set+4c
+#5  0x46ee05 in vy_deferred_delete_on_replace+3d5
+#6  0x5df1e2 in trigger_run+32
+#7  0x4faf95 in txn_commit_stmt+1e5
+#8  0x4ca1a4 in vy_deferred_delete_batch_process_f+1f4
+#9  0x5ce788 in cmsg_deliver+18
+#10 0x5cf2bf in fiber_pool_f+8f
+#11 0x421101 in _ZL16fiber_cxx_invokePFiP13__va_list_tagES0_+11
+#12 0x5c8cf0 in fiber_loop+30
+#13 0x8273e4 in coro_init+44
+Aborted (core dumped)
