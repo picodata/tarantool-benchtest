@@ -2,25 +2,6 @@ local ddl_tires = 3
 
 -- common and helper functions
 
--- get field names
-local function field_names(self) {
-    local ns = {}
-    for _, f in spairs(self.fields) do
-        ns[#ns+1] = f.name
-    end
-    return ns
-}
-
--- get field names from index parts
-local function index_fields(self, parts) {
-    local fs = {}
-    for _, p in spairs(parts) do
-        fn = self.fields[p.fieldno]
-        fs[#fs+1] = fn
-    end
-    return fs
-}
-
 -- select random secondary index
 local function rand_si(self)
     return rand_item(self.si_list)
@@ -95,6 +76,46 @@ end
 local function rand_tuple(self)
     return rand_item(self.tuples)
 end
+
+-- shorutcut to create select operation
+local function select_op(self, index, key, offset, limit)
+    return {
+        type = operation.space_select,
+        space = self.name,
+        index = index,
+        key = key,
+        options = {
+            offset = offset,
+            limit = limit,
+        }
+    }
+end
+
+-- generate random offset/limit
+local function rand_select_offset_or_limit(self)
+    local min_offset = #self.tuples / 20
+    local max_offset = #self.tuples / 2
+    return math.random(min_offset, max_offset)
+end
+
+-- get list of fieldno for space
+local function space_fieldno(self) {
+    local is = {}
+    for i, _ in spairs(self.fields) do
+        is[#is+1] = i
+    end
+    return is
+}
+
+-- get list of fieldno for index
+local function index_fieldno(self, parts) {
+    local fs = {}
+    for _, p in spairs(parts) do
+        fn = self.fields[p.fieldno]
+        fs[#fs+1] = fn
+    end
+    return fs
+}
 
 -- DDL operations
 
@@ -343,102 +364,95 @@ local function insert(self)
     local t = self.ctor(#self.tuples+1)
     self.tuples[#self.tuples+1] = t
 
-   -- TODO: return operation
-   return nil
+    return {
+        type = operation.space_insert,
+        space = self.name,
+        tuple = t,
+    }
 end
 
 local function select_by_pk(self)
     local t = rand_tuple(self)
-    local pk = fields_by_name(t, index_fields(self.pi))
+    local fn = index_fieldno(self, self.pi)
+    local key = utils.items_by_index(t, fn)
 
-    -- TODO: return operation
-    return nil
+    return select_op(self, 'primary', key)
 end
 
 local function select_by_full_sk(self)
     local t = rand_tuple(self)
     local si = rand_si(self)
-    local sk = fields_by_name(t, index_fields(si.parts))
+    local fn = index_fieldno(self, si.parts)
+    local key = utils.items_by_index(t, fn)
 
-    -- TODO: return operation
-    return nil
+    return select_op(self, si.name, key)
 end
 
 local function select_by_partial_sk(self)
     local t = rand_tuple(self)
     local si = rand_si(self)
-    local sk = fields_by_name(t, first_rand_items(index_fields(si.parts) #si.parts-1))
+    local fn = utils.first_rand_items(index_fieldno(self, si.parts), #si.parts-1)
+    local key = utils.items_by_index(t, fn)
 
-    -- TODO: return operation
-    return nil
-end
-
-local function select_with_offset(self)
-    local t = rand_tuple(self)
-    local o = fields_by_name(t, index_fields(self.pi))
-
-    -- TODO: return operation
-    return nil
+    return select_op(self, si.name, key)
 end
 
 local function select_with_offset_by_full_sk(self)
-    -- random offset
-    local _, o = rand_tuple(self)
+    local op = select_by_full_sk(self)
+    op.options.offset = rand_select_offset_or_limit(self)
 
-    -- random select by secondary key
-    local t = rand_tuple(self)
-    local si = rand_si(self)
-    local sk = fields_by_name(t, index_fields(si.parts))
-
-    -- TODO: return operation
-    return nil
+    return op
 end
 
 local function select_with_offset_by_partial_sk(self)
-    -- random offset by primary key
-    local _, o = rand_tuple(self)
+    local op = select_by_partial_sk(self)
+    op.options.offset = rand_select_offset_or_limit(self)
 
-    -- random select by secondary key
-    local t = rand_tuple(self)
-    local si = rand_si(self)
-    local sk = fields_by_name(t, rand_items(index_fields(si.parts), #si.parts-1))
-
-    -- TODO: return operation
-    return nil
+    return op
 end
 
 local function update(self)
+    -- copy some fields from t1 to t2
     local t1 = rand_tuple(self)
     local t2 = rand_tuple(self)
 
-    -- select fields to copy from r1 to r2
-    local fn = rand_items(field_names(self), #self.fields)
-    local upd_fields = fields_by_name(t1, fn)
-
-    -- update record
-    for _, f in pairs(upd_fields) do
-        t2[f.name] = f.value
+    -- construct update operators from t1
+    local operator_fn = rand_items(space_fieldno(self), #self.fields)
+    local operator_val = utils.items_by_index(t1, fn)
+    local operators = {}
+    for i, fn in utils.spairs(operator_fn) do
+        operators[#operators+1] = { '=', fn, operator_val[i] }
     end
 
-    -- operation
-    local pk = fields_by_name(t2, self.pi)
-    local upd = {}
-    for _, f in pairs(upd_fields) do
-        upd[f.name] = f.value
+    -- update t2 tuple by applying operators
+    for _, o in utils.spairs(operators) do
+        t2[o[2]] = o[3]
     end
 
-    -- TODO: return operation
-    return nil
+    -- primary key for t2
+    local pk_fn = index_fieldno(self, self.pi)
+    local pk = utils.items_by_index(t2, pk_fn)
+
+    reutrn {
+        type = operation.space_update,
+        space = self.name,
+        key = pk,
+        operators = operators,
+    }
 end
 
 local function delete(self)
     local t, ti = rand_tuple(self)
     table.remove(self.tuples, ti)
 
-    local pk = fields_by_name(t, self.pi)
+    local pk_fn = index_fieldno(self, self.pi)
+    local pk = utils.items_by_index(t, pk_fn)
 
-    -- TODO: return operation
-    return nil
+    return {
+        type = operation.space_delete,
+        space = self.name,
+        key = pk,
+    }
 end
 
 local function new(space_name, tuple_constructor)
@@ -503,23 +517,11 @@ local function new(space_name, tuple_constructor)
 
         -- select tuples
 
-        select_by_pk = function(self)
-        end,
-
-        select_by_full_sk = function(self)
-        end,
-
-        select_by_partial_sk = function(self)
-        end,
-
-        select_with_offset = function(self)
-        end,
-
-        select_with_offset_by_full_sk = function(self)
-        end,
-
-        select_with_offset_by_partial_sk = function(self)
-        end,
+        select_by_pk = select_by_pk,
+        select_by_full_sk = select_by_full_sk,
+        select_by_partial_sk = select_by_partial_sk,
+        select_with_offset_by_full_sk = select_with_offset_by_full_sk,
+        select_with_offset_by_partial_sk = select_with_offset_by_partial_sk,
 
         -- update tuple
 

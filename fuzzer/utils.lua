@@ -59,7 +59,7 @@ local function has_item(t, item)
 end
 
 local function equal_items(t1, t2)
-    for i, v in pairs(t1) do
+    for i, v in spairs(t1) do
         if v ~= t2[i] then
             return false
         end
@@ -75,13 +75,10 @@ local function copy_items(t)
     return tc
 end
 
-local function fields_by_name(t, names)
+local function items_by_index(t, idxs)
     local fields = {}
-    for _, n in spairs(names) do
-        fields[#fields+1] = {
-            name = n,
-            value = t[n],
-        }
+    for _, i in spairs(idxs) do
+        fields[#fields+1] = t[i]
     end
     return fields
 end
@@ -95,5 +92,5 @@ return {
     has_item = has_item,
     equal_items = equal_items,
     copy_items = copy_items,
-    fields_by_name = fields_by_name,
+    fields_by_index = fields_by_index,
 }
