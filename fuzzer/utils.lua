@@ -92,5 +92,5 @@ return {
     has_item = has_item,
     equal_items = equal_items,
     copy_items = copy_items,
-    fields_by_index = fields_by_index,
+    items_by_index = items_by_index,
 }

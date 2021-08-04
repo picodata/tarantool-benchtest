@@ -1,16 +1,22 @@
+-- !!!
+local json = require('json')
+
+local operation = require('fuzzer.operation')
+local utils = require('fuzzer.utils')
+
 local ddl_tires = 3
 
 -- common and helper functions
 
 -- select random secondary index
 local function rand_si(self)
-    return rand_item(self.si_list)
+    return utils.rand_item(self.si_list)
 end
 
 local function try_add_field_to_index(self, index)
     -- find candidate fields to add to index
     local cf = {}
-    for _, f in spairs(self.fields) do
+    for _, f in utils.spairs(self.fields) do
         if not has_item(index, f) then
             cf[#cf+1] = f
         end
@@ -20,10 +26,10 @@ local function try_add_field_to_index(self, index)
     end
 
     -- new field to add
-    local nf = rand_item(cf)
+    local nf = utils.rand_item(cf)
 
     -- new index
-    local ni = copy_items(index)
+    local ni = utils.copy_items(index)
     ni[#ni+1] = nf
 
     return nf, ni
@@ -36,10 +42,10 @@ local function try_remove_field_from_index(self, index)
     end
 
     -- index of field to remove
-    local _, fi = rand_item(index)
+    local _, fi = utils.rand_item(index)
 
     -- new index
-    local ni = copy_items(index)
+    local ni = utils.copy_items(index)
     table.remove(ni, fi)
 
     return fi, ni
@@ -74,13 +80,13 @@ end
 
 -- select random tuple
 local function rand_tuple(self)
-    return rand_item(self.tuples)
+    return utils.rand_item(self.tuples)
 end
 
 -- shorutcut to create select operation
 local function select_op(self, index, key, offset, limit)
     return {
-        type = operation.space_select,
+        type = operation.types.space_select,
         space = self.name,
         index = index,
         key = key,
@@ -93,29 +99,28 @@ end
 
 -- generate random offset/limit
 local function rand_select_offset_or_limit(self)
-    local min_offset = #self.tuples / 20
-    local max_offset = #self.tuples / 2
+    local min_offset = 1
+    local max_offset = 200
     return math.random(min_offset, max_offset)
 end
 
 -- get list of fieldno for space
-local function space_fieldno(self) {
-    local is = {}
-    for i, _ in spairs(self.fields) do
-        is[#is+1] = i
+local function space_fieldno(self)
+    local fn = {}
+    for i, _ in utils.spairs(self.fields) do
+        fn[#fn+1] = i
     end
-    return is
-}
+    return fn
+end
 
 -- get list of fieldno for index
-local function index_fieldno(self, parts) {
-    local fs = {}
-    for _, p in spairs(parts) do
-        fn = self.fields[p.fieldno]
-        fs[#fs+1] = fn
+local function index_fieldno(self, parts)
+    local fn = {}
+    for _, p in utils.spairs(parts) do
+        fn[#fn+1] = p[1]+1
     end
-    return fs
-}
+    return fn
+end
 
 -- DDL operations
 
@@ -123,7 +128,7 @@ local function index_fieldno(self, parts) {
 
 local function try_add_si(self)
     -- try to bring back random secondary index
-    local si, si_idx = rand_item(self.si_del)
+    local si, si_idx = utils.rand_item(self.si_del)
     if not validate_si(self, si.parts, si_idx) then
         return nil
     end
@@ -361,11 +366,12 @@ end
 -- DML operations
 
 local function insert(self)
-    local t = self.ctor(#self.tuples+1)
+    self.tuple_counter = self.tuple_counter + 1
+    local t = self.tuple_ctor(self.tuple_counter)
     self.tuples[#self.tuples+1] = t
 
     return {
-        type = operation.space_insert,
+        type = operation.types.space_insert,
         space = self.name,
         tuple = t,
     }
@@ -434,7 +440,7 @@ local function update(self)
     local pk = utils.items_by_index(t2, pk_fn)
 
     reutrn {
-        type = operation.space_update,
+        type = operation.types.space_update,
         space = self.name,
         key = pk,
         operators = operators,
@@ -449,7 +455,7 @@ local function delete(self)
     local pk = utils.items_by_index(t, pk_fn)
 
     return {
-        type = operation.space_delete,
+        type = operation.types.space_delete,
         space = self.name,
         key = pk,
     }
@@ -465,13 +471,14 @@ local function new(space_name, tuple_constructor)
         si_del = {},
         si_name_counter = 1000,
 
-        tuple_ctor = constructor,
+        tuple_ctor = tuple_constructor,
         tuples = {},
+        tuple_counter = 1
     }
 
     -- space format
     space = box.space[space_name]
-    for _, f in spairs(space:format()) do
+    for _, f in utils.spairs(space:format()) do
         self.fields[#self.fields+1] = {
             name = f.name,
             type = f.type,
@@ -479,13 +486,13 @@ local function new(space_name, tuple_constructor)
     end
 
     -- space indexes
-    for _, idx in spairs(space.index) do
+    for _, idx in pairs(box.space._index:select{space.id}) do
         if idx.name == 'primary' then
-            self.pi = idx.parts
+            self.pi = utils.copy_items(idx.parts)
         else
             self.si_list[#self.si_list+1] = {
                 name = idx.name,
-                parts = copy_items(idx.parts),
+                parts = utils.copy_items(idx.parts),
             }
         end
     end
@@ -517,10 +524,15 @@ local function new(space_name, tuple_constructor)
 
         -- select tuples
 
+        -- primary key
         select_by_pk = select_by_pk,
+        -- full secondary key
         select_by_full_sk = select_by_full_sk,
+        -- partial secondary key
         select_by_partial_sk = select_by_partial_sk,
+        -- offset with full secondary key
         select_with_offset_by_full_sk = select_with_offset_by_full_sk,
+        -- offset with partial secondary key
         select_with_offset_by_partial_sk = select_with_offset_by_partial_sk,
 
         -- update tuple
