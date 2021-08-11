@@ -9,4 +9,4 @@ Replica stabely crashes in first 10 minutes of test for the following builds/ver
 - 1.10.10-67-g2babf65ee
 - 2.9.0-254-g68851b351
 
-If read operations are enabled on replica - https://gitlab.com/picodata/tarantool-repro-suite/-/blob/reproduce-vinyl-crash-tnt-issue-4572/example/fuzz_vinyl/replica/fuzz_vinyl_replica.lua#L83, the crash will not occure anymore. However, it will seriously affect replica's CPU usage.
+If read operations are enabled on replica - https://github.com/picodata/tarantool-benchtest/blob/reproduce-vinyl-crash-tnt-issue-4572/example/fuzz_vinyl/replica/fuzz_vinyl_replica.lua#L83, the crash will not occure anymore. However, it will seriously affect replica's CPU usage.
